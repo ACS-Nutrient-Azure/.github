@@ -1,9 +1,7 @@
-## Hi there 👋
-
-
 # 💊 ACS-Nutrients: Personal Supplement Intelligence
 
-> **데이터 기반 개인 맞춤형 영양제 분석 및 추천 플랫폼** > 사용자의 건강검진 기록, 처방약물, 현재 복용 중인 영양제를 분석하여 최적의 영양 상태를 가이드합니다.
+> **데이터 기반 개인 맞춤형 영양제 분석 및 추천 플랫폼**
+> 사용자의 건강검진 기록, 처방약물, 현재 복용 중인 영양제를 분석하여 최적의 영양 상태를 가이드합니다.
 
 ---
 
@@ -13,81 +11,139 @@
 
 ---
 
-## 🏗️ Microservices Architecture (MSA)
+## 🏗️ Architecture Overview
 
-우리 서비스는 독립적인 확장이 가능하도록 4개의 핵심 서비스로 구성됩니다.
-
-### 1. 👤 User Information Service (사용자 정보)
-
-사용자의 민감한 건강 데이터를 안전하게 수집하고 관리합니다.
-
-* **인증/인가:** 회원가입 및 로그인 관리
-* **데이터 연동:** `CODEF API`를 통한 건강검진 결과 및 문진 데이터 수집
-* **처방 정보:** `CODEF API` 기반 처방약명, 함량, 처방 기간 관리
-* **OCR 분석:** `AWS Textract`를 활용하여 현재 복용 중인 영양제 라벨에서 성분 자동 추출
-* **개인화:** 사용자의 주관적 현재 컨디션 상태 기록
-
-### 2. 🧠 Recommendation & Analysis Service (추천/분석)
-
-서비스의 핵심 로직이 작동하는 '브레인' 부문입니다.
-
-* **복합 AI 분석:** 검진 데이터 + 처방약 + 컨디션을 종합하여 부족 영양군 도출
-* **정밀 함량 계산:** * 필요 영양군 권장량 vs 현재 복용 중인 영양제 함량 비교 로직
-* 부족분만큼의 최적 상품 추천
-
-
-* **데이터베이스 구축:** * 영양제별 일일 적정/최대 섭취량(RDA/UL) 가이드라인 DB
-* 실제 유통 영양제 상품 정보 및 성분 DB
-
-
-
-### 3. 📅 Intake History Service (섭취 이력)
-
-사용자의 꾸준한 건강 습관 형성을 돕습니다.
-
-* **데일리 로그:** 매일 섭취한 영양제 리스트 관리
-* **시각화:** 달력 형태의 UI를 통해 섭취 이력 및 달성도 확인
-
-### 4. 💬 Chatbot Consultation Service (챗봇 상담)
-
-LLM을 활용한 고도화된 상담 경험을 제공합니다.
-
-* **맞춤형 상담:** 분석 결과와 사용자 정보를 종합하여 추가적인 건강 궁금증 해소
-* **지식 기반:** 사용자 데이터를 기반으로 한 컨텍스트 유지 상담
+```
+[React Frontend] ──HTTPS──▶ [ALB] ──▶ ┌─────────────────────────────────────┐
+                                       │         ECS Fargate (Private)        │
+                                       │  users │ analysis │ chatbot │ history │
+                                       └──────────────┬──────────────────────┘
+                                                       │ boto3 invoke
+                                       ┌──────────────▼──────────────────────┐
+                                       │    AWS Bedrock AgentCore Runtime     │
+                                       │  supervisor → analysis / question    │
+                                       │             → summary                │
+                                       └─────────────────────────────────────┘
+```
 
 ---
 
-## 🔒 Data Privacy & Security Policy
+## 📦 Repository Structure
 
-우리는 사용자의 민감 정보를 보호하기 위해 엄격한 데이터 관리 정책을 준수합니다.
+```
+code-total/
+├── codecaine-react-frontend/        # React 18 + Vite 프론트엔드
+├── codecaine-python-users/          # 사용자 인증 및 건강 데이터 수집
+├── codecaine-python-analysis/       # 영양 분석 및 추천 엔진
+├── codecaine-python-chatbot/        # 챗봇 상담 (WebSocket)
+├── codecaine-python-history/        # 이력 저장 및 아카이빙
+├── codecaine-python-supervisoragent/  # 에이전트 오케스트레이션
+├── codecaine-python-analysisagent/    # 영양 분석 AI 에이전트
+├── codecaine-python-questionagent/    # Q&A AI 에이전트
+├── codecaine-python-summaryagent/     # 응답 포맷팅 에이전트
+└── codecaine-terraform-infra/       # AWS 인프라 (Terraform IaC)
+```
 
-* **물리적 삭제 정책:** * `건강검진 데이터` 및 `처방약물 데이터`: 수집 후 **1개월** 뒤 자동 물리적 삭제
-* `챗봇 상담 이력`: 상담 완료 후 **최대 1개월** 보관 후 물리적 삭제
+---
 
+## 🧩 Microservices
 
-* **최소 저장 원칙:** 분석에 필요한 핵심 데이터 외에는 서버에 잔류시키지 않습니다.
+### 백엔드 서비스 (ECS Fargate)
+
+| 서비스 | 역할 | 핵심 기술 |
+|--------|------|-----------|
+| **users** | 인증, CODEF API 연동, OCR | FastAPI, Cognito, Textract, asyncpg |
+| **analysis** | 영양 분석 파이프라인, 추천 | FastAPI, SQLAlchemy, AgentCore |
+| **chatbot** | 실시간 상담, 세션 관리 | FastAPI, WebSocket, Redis |
+| **history** | 이력 저장 및 아카이빙 | FastAPI, S3, Aurora PG |
+
+### AI 에이전트 (Bedrock AgentCore Runtime)
+
+| 에이전트 | 역할 |
+|----------|------|
+| **supervisor** | 요청 분류 및 라우팅 (Q&A vs 재분석) |
+| **analysis** | KB 기반 영양 분석 (Cohere 임베딩) |
+| **question** | 일반 영양 Q&A (DuckDuckGo 검색 포함) |
+| **summary** | 분석 결과 자연어 변환 |
+
+**요청 흐름:**
+- **분석 경로:** Users → Analysis Service → AnalysisAgent (KB + Bedrock) → 결과 저장
+- **상담 경로:** Users → Chatbot → SupervisorAgent → QuestionAgent or AnalysisAgent → SummaryAgent → 응답
 
 ---
 
 ## 🛠️ Tech Stack
 
 | Category | Technology |
-| --- | --- |
-| **Cloud** | AWS (App Runner, S3, Firehose, Athena) |
-| **AI/ML** | AWS Textract, Claude 3 (via Bedrock), Claude Code |
-| **API Integration** | CODEF API (Health/Medical) |
-| **Database** | PostgreSQL / DynamoDB (Session & Logs) |
-| **Architecture** | Microservices Architecture (MSA) |
+|----------|------------|
+| **Frontend** | React 18.3, Vite 6.3, TypeScript, Tailwind CSS 4, Radix UI, Recharts |
+| **Backend** | Python 3.11, FastAPI, SQLAlchemy 2.0, asyncpg, Alembic |
+| **AI/LLM** | AWS Bedrock (Claude), LangGraph, LangChain, Cohere Embeddings |
+| **Auth** | AWS Cognito (JWT RS256), Kakao OAuth |
+| **Database** | Aurora PostgreSQL (Multi-AZ), ElastiCache Redis |
+| **Storage** | S3 (아카이브, KB, 백업) |
+| **Infrastructure** | AWS ECS Fargate, ALB, ECR, VPC, Secrets Manager |
+| **IaC** | Terraform (14+ 모듈) |
+| **CI/CD** | GitHub Actions → ECR → ECS (OIDC 기반 IAM) |
+| **Observability** | AWS X-Ray, ADOT, CloudWatch, AWS Managed Grafana |
+| **External API** | CODEF API (건강검진/처방), AWS Textract (OCR) |
+
+---
+
+## ☁️ Infrastructure (Terraform)
+
+**Region:** ap-northeast-2 (Seoul) / Multi-AZ (2a, 2c)
+
+| 모듈 | 내용 |
+|------|------|
+| `foundation` | VPC (10.0.0.0/16), 서브넷, IGW, 보안 그룹 |
+| `compute` | ECS Fargate 클러스터, ALB, Bastion Host |
+| `database-rds` | Aurora PostgreSQL (users/analysis/chatbot/history DB) |
+| `security` | Route53, ACM, WAF, Cognito User Pool |
+| `agentcore` | Bedrock AgentCore Runtime, Lambda |
+| `monitoring` | Grafana Workspace, CloudWatch 대시보드 |
+| `fis` | Chaos Engineering (14+ 실험 시나리오) |
+| `dms` | Database Migration Service |
+| `dr` | Disaster Recovery |
+
+---
+
+## 🔒 데이터 보안 정책
+
+* **건강검진 데이터 / 처방약물 데이터:** 수집 후 **1개월** 뒤 자동 물리적 삭제
+* **챗봇 상담 이력:** 상담 완료 후 **최대 1개월** 보관 후 물리적 삭제
+* **최소 저장 원칙:** 분석에 필요한 핵심 데이터 외 서버 잔류 금지
+* **암호화:** Secrets Manager 기반 DB 자격증명, TLS 통신
+
+---
+
+## 🚦 CI/CD
+
+모든 서비스는 동일한 파이프라인을 따릅니다.
+
+```
+Push to deploy branch
+  → GitHub Actions (OIDC → AWS IAM)
+  → Docker Build & Push (ECR)
+  → ECS Task Definition 업데이트
+  → ECS Rolling Deploy
+```
+
+---
+
+## 🔭 Observability
+
+* **분산 추적:** AWS X-Ray + ADOT (OpenTelemetry) 사이드카
+* **메트릭:** CloudWatch (ECS, ALB, AgentCore 커스텀 메트릭)
+* **시각화:** AWS Managed Grafana (Service Health / Business Overview 대시보드)
+* **카오스 테스트:** FIS 실험 (ElastiCache 재부팅, NAT 장애, RDS 격리 등)
 
 ---
 
 ## 👥 Members
 
 * **Organization:** [ACS-Nutrients](https://github.com/ACS-Nutrients)
-* **Contact:** `your-email@example.com`
 
 ---
 
 **ACS-Nutrients**는 데이터로 증명되는 건강한 삶을 지향합니다.
-
----
